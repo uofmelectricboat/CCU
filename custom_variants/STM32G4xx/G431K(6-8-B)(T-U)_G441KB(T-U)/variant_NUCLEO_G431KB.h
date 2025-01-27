@@ -75,6 +75,9 @@
 #define PB8_ALT1                (PB8  | ALT1)
 #define PB8_ALT2                (PB8  | ALT2)
 
+#define ADC2_OPAMP2 (PNAME_ANALOG_INTERNAL_BASE | 1u)
+#define ADC2_OPAMP3 (PNAME_ANALOG_INTERNAL_BASE | 2u)
+
 // This must be a literal
 #define NUM_DIGITAL_PINS        25
 // This must be a literal with a value less than or equal to to MAX_ANALOG_INPUTS
@@ -142,6 +145,9 @@
 #if !defined(HAL_DAC_MODULE_DISABLED)
   #define HAL_DAC_MODULE_ENABLED
 #endif
+
+#define HAL_FDCAN_MODULE_ENABLED
+#define HAL_OPAMP_MODULE_ENABLED
 
 /*----------------------------------------------------------------------------
  *        Arduino objects - C++ only

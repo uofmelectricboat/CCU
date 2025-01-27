@@ -1,8 +1,5 @@
-#define FDCAN1
-#define HAL_FDCAN_MODULE_ENABLED
-#define HAL_OPAMP_MODULE_ENABLED
-
 #include <Arduino.h>
+#include "CAN_Bus_Arduino.h"
 
 ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
@@ -10,6 +7,8 @@ ADC_HandleTypeDef hadc2;
 DAC_HandleTypeDef hdac3;
 
 FDCAN_HandleTypeDef hfdcan1;
+
+UART_HandleTypeDef hlpuart1;
 
 OPAMP_HandleTypeDef hopamp1;
 OPAMP_HandleTypeDef hopamp2;
@@ -22,17 +21,80 @@ static void MX_ADC2_Init(void);
 static void MX_DAC3_Init(void);
 static void MX_FDCAN1_Init(void);
 static void MX_OPAMP1_Init(void);
-static void MX_OPAMP3_Init(void);
 static void MX_OPAMP2_Init(void);
+static void MX_OPAMP3_Init(void);
+static void MX_LPUART1_UART_Init(void);
 
 
+// For printf:
+#ifdef __GNUC__
+#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+#else
+#define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+#endif
+
+PUTCHAR_PROTOTYPE
+{
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+  return ch;
+}
+
+
+// CAN definitions
+using namespace umeb::can;
+
+can_settings_arduino can_cfg = {
+  .settings = {
+    .BitRate = 500000,
+    .FDRate = 1000000,
+  },
+  .canModule = &fdcan1,
+  .mode = ACANFD_STM32_Settings::ModuleMode::NORMAL_FD,
+};
+CAN_Bus_Arduino bus(can_cfg);
+
+CAN_Message<uint32_t> throttle1;
+CAN_Message<uint32_t> throttle2;
+CAN_Packet<2> throttle_msg(0x50, &throttle1, &throttle2);
+
+// Main
 void setup() {
   // put your setup code here, to run once:
-  
+  SystemClock_Config();
+  MX_GPIO_Init();
+  MX_ADC1_Init();
+  MX_ADC2_Init();
+  MX_DAC3_Init();
+  MX_FDCAN1_Init();
+  MX_OPAMP1_Init();
+  MX_OPAMP2_Init();
+  MX_OPAMP3_Init();
+  MX_LPUART1_UART_Init();
+
+  bus.Init();
+  bus.makePacketPeriodic(&throttle_msg, 100u);
+
+  analogReadResolution(12);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  throttle1 = analogRead(ADC2_OPAMP2); // Check PinNamesVar for more info
+  throttle2 = analogRead(ADC2_OPAMP3);
+  printf("Read values: %d %d\n\r", (uint32_t) throttle1, (uint32_t) throttle2);
+
+  // Going from 12-bit to 12-bit, so no bit shift error
+
+  double out = (double) throttle1 * 2.5 / 3.3;
+
+  uint32_t raw_out = (uint32_t) out;
+
+  // analogWrite or dac_write_value() cannot be used due to internal op amp buffering
+  if (HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_1, DAC_ALIGN_12B_R, raw_out) != HAL_OK) {
+    /* Setting value Error */
+    printf("ERROR!\n\r");
+  }
+  delay(50);
 }
 
 void SystemClock_Config(void)
@@ -239,13 +301,6 @@ static void MX_DAC3_Init(void)
   {
     Error_Handler();
   }
-
-  /** DAC channel OUT2 config
-  */
-  if (HAL_DAC_ConfigChannel(&hdac3, &sConfig, DAC_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
   /* USER CODE BEGIN DAC3_Init 2 */
 
   /* USER CODE END DAC3_Init 2 */
@@ -407,4 +462,52 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
+}
+
+
+/**
+  * @brief LPUART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_LPUART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN LPUART1_Init 0 */
+
+  /* USER CODE END LPUART1_Init 0 */
+
+  /* USER CODE BEGIN LPUART1_Init 1 */
+
+  /* USER CODE END LPUART1_Init 1 */
+  hlpuart1.Instance = LPUART1;
+  hlpuart1.Init.BaudRate = 115200;
+  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
+  hlpuart1.Init.StopBits = UART_STOPBITS_1;
+  hlpuart1.Init.Parity = UART_PARITY_NONE;
+  hlpuart1.Init.Mode = UART_MODE_TX_RX;
+  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  hlpuart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&hlpuart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&hlpuart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN LPUART1_Init 2 */
+
+  /* USER CODE END LPUART1_Init 2 */
+
 }
