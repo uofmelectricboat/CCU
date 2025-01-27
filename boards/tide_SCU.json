@@ -1,0 +1,48 @@
+{
+  "build": {
+    "arduino": {
+      "variant_h": "variant_TIDE_SCU_REV_B.h"
+    },
+    "core": "stm32",
+    "cpu": "cortex-m0plus",
+    "extra_flags": "-DSTM32G0 -DSTM32G0xx -DSTM32G0B1xx",
+    "f_cpu": "64000000L",
+    "framework_extra_flags": {
+      "arduino": "-D__CORTEX_SC=0 -DARDUINO_TIDE_SCU_REV_B"
+    },
+    "mcu": "stm32g0b1ceu6",
+    "product_line": "STM32G0B1xx",
+    "variant": "STM32G0xx/G0B1C(B-C-E)(T-U)_G0C1C(C-E)(T-U)"
+  },
+  "connectivity": [
+    "can"
+  ],
+    "debug": {
+    "default_tools": [
+      "stlink"
+    ],
+    "jlink_device": "STM32G0B1CEU6",
+    "onboard_tools": [
+      "stlink"
+    ],
+    "openocd_target": "stm32g0x",
+    "svd_path": "STM32G0B1.svd"
+  },
+  "frameworks": [
+    "arduino",
+    "stm32cube"
+  ],
+  "name": "Tide SCU Rev B",
+  "upload": {
+    "maximum_ram_size": 147456,
+    "maximum_size": 524288,
+    "protocol": "stlink",
+    "protocols": [
+      "jlink",
+      "serial",
+      "stlink"
+    ]
+  },
+  "url": "https://github.com/uofmelectricboat/SCU.git",
+  "vendor": "UMEB"
+}
