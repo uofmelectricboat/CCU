@@ -142,10 +142,7 @@
 #endif
 
 /* Extra HAL modules */
-#if !defined(HAL_DAC_MODULE_DISABLED)
-  #define HAL_DAC_MODULE_ENABLED
-#endif
-
+#define HAL_DAC_MODULE_ENABLED
 #define HAL_FDCAN_MODULE_ENABLED
 #define HAL_OPAMP_MODULE_ENABLED
 
