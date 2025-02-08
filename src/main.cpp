@@ -15,7 +15,6 @@ OPAMP_HandleTypeDef hopamp2;
 OPAMP_HandleTypeDef hopamp3;
 
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_DAC3_Init(void);
@@ -73,15 +72,14 @@ can_settings_arduino can_cfg = {
 };
 CAN_Bus_Arduino bus(can_cfg);
 
-CAN_Message<uint32_t> throttle1;
-CAN_Message<uint32_t> throttle2;
-CAN_Packet<2> throttle_msg(0x50, &throttle1, &throttle2);
+CAN_Message<uint8_t> = CCUreadingyay;
+CAN_Packet<1> ccu_message(0x17, &CCUreadingyay);
+
 
 // Main
 void setup() {
   // put your setup code here, to run once:
   SystemClock_Config();
-  MX_GPIO_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
   MX_DAC3_Init();
@@ -92,34 +90,31 @@ void setup() {
   // MX_LPUART1_UART_Init();
 
   bus.Init();
-  bus.makePacketPeriodic(&throttle_msg, 100u);
+  bus.makePacketPeriodic(&ccu_message, 500u);
 
   analogReadResolution(12);
 
   // Initialize pins
-  pinMode(MODE, INPUT_PULLUP);
-  // pinMode(GEAR_F, INPUT_PULLUP);
-  // pinMode(GEAR_N, INPUT_PULLUP);
-  pinMode(GEAR_R, INPUT_PULLUP);
-  pinMode(TRIM_UP_STICKS, INPUT_PULLUP);
-  pinMode(TRIM_DN_STICKS, INPUT_PULLUP);
-  pinMode(TRIM_UP_WHEEL, INPUT_PULLUP);
-  pinMode(TRIM_DN_WHEEL, INPUT_PULLUP);
-  pinMode(ACS_UP, INPUT_PULLUP);
-  pinMode(ACS_DN, INPUT_PULLUP);
-  // pinMode(CAM, OUTPUT);
-  // pinMode(LIGHTS, OUTPUT);
-  // pinMode(TRIM_UP_CTRL, OUTPUT);
-  // pinMode(TRIM_DN_CTRL, OUTPUT);
+  pin_function(MODE, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(GEAR_R, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(GEAR_F, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(GEAR_N, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(TRIM_UP_STICKS, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(TRIM_DN_STICKS, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(TRIM_UP_WHEEL, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(TRIM_DN_WHEEL, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(ACS_UP, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(ACS_DN, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
 
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PinState::GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PinState::GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, GPIO_PinState::GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_12, GPIO_PinState::GPIO_PIN_RESET);
-  // digitalWrite(CAM, HIGH);
-  // digitalWrite(LIGHTS, HIGH);
-  // digitalWrite(TRIM_UP_CTRL, HIGH);
-  // digitalWrite(TRIM_DN_CTRL, HIGH);
+  pin_function(CAM, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
+  pin_function(LIGHTS, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
+  pin_function(TRIM_UP_CTRL, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
+  pin_function(TRIM_DN_CTRL, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
+
+  digitalWriteFast(CAM, LOW);
+  digitalWriteFast(LIGHTS, LOW);
+  digitalWriteFast(TRIM_UP_CTRL, LOW);
+  digitalWriteFast(TRIM_DN_CTRL, LOW);
   next_throttle_tick = millis();
   next_manager_tick = millis();
 
@@ -128,18 +123,7 @@ void setup() {
 
 
 void loop() {
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PinState::GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PinState::GPIO_PIN_SET);
-  // HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, GPIO_PinState::GPIO_PIN_SET);
-  // HAL_GPIO_WritePin(GPIOC, GPIO_PIN_12, GPIO_PinState::GPIO_PIN_SET);
-
-  delay(2000);
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PinState::GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PinState::GPIO_PIN_RESET);
-  // HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, GPIO_PinState::GPIO_PIN_RESET);
-  // HAL_GPIO_WritePin(GPIOC, GPIO_PIN_12, GPIO_PinState::GPIO_PIN_RESET);
-  delay(2000);
-  return;
+  //throttle land
   if (millis() > next_throttle_tick) {
     // --------- THROTTLE HANDLING -----------
 
@@ -194,8 +178,31 @@ void loop() {
 
   // Tick CANBus
   bus.tick();
-}
+//setting the guys to be read thanks
+  int mode = digitalReadFast(MODE);
+  uint8_t gearguy = Read_Gear_idk();
+  bool acsup = digitalReadFast(ACS_UP);
+  bool acsdn = digitalReadFast(ACS_DN);
+  int throttleuse;
+  int up, down;
+  //if else for which throttle to use and also trim (pretty code)
+  if(mode == 0){
+    throttleuse = Read_Throttle_ADC(1);
+    up = digitalReadFast(TRIM_UP_WHEEL);
+    down = digitalReadFast(TRIM_DN_WHEEL);
+  }
+  else if(mode == 1){
+    throttleuse = Read_Throttle_ADC(2);
+    up = digitalReadFast(TRIM_UP_STICKS);
+    down = digitalReadFast(TRIM_DN_STICKS);
+  }
+  if (up && down)
+    up = 0; down = 0;
+  digitalWriteFast(TRIM_UP_CTRL,up);
+  digitalWriteFast(TRIM_DN_CTRL,down);
 
+  CCUreadingyay = gearguy|(acsup<<2)|(acsdn<<3)|(throttleuse<<4)|(mode<<6);
+}
 
 // Read a throttle opamp channel
 // Throttle 1 reads from OPAMP 2 (adc2 ch16)
@@ -238,7 +245,42 @@ uint16_t Read_Throttle_ADC(int throttle) {
   return th;
 }
 
-
+//read gear from gear thing
+//casseia is spitting some BULL about gear uhh idk what im doing but ok
+//gear prob has to be a binary input, assumed using fwee pins
+//heads up theres nasty if elses in here and idk if this is the right procedure but you get code
+uint8_t Read_Gear_idk(void){
+  //gear value will be 00 or 01 or 10 or 11. otherwise it's not valid idk how to handle that
+  //these are the pins we are gettin the state from i think
+  uint8_t gear_pin_1 = digitalReadFast(GEAR_N);
+  uint8_t gear_pin_2 = digitalReadFast(GEAR_F);
+  uint8_t gear_pin_3 = digitalReadFast(GEAR_R);
+  //lowkey used gpt for this because idk how to combine using binary . shoutout gpt
+  //this basically turns the input into like binary ? it just mashes them together
+  //also this code is mad gross sorry
+  if(gear_pin_1==1 &&gear_pin_2==0&&gear_pin_3==0)
+  {
+    //assuming neutral
+    return 0b00;
+  }
+  else if(gear_pin_2==1 &&gear_pin_1==0&&gear_pin_3==0)
+  {
+    //assuming forward
+    return 0b01;
+  }
+  else if(gear_pin_3==1 &&gear_pin_1==0&&gear_pin_2==0)
+  {
+    //assuming reverse
+    return 0b10;
+  }
+  //can this live outside an else statement ? idk. lol
+  else
+  {
+    //wtf is going on condition
+    return 0b11;
+  }
+  //idk if i need to add another return to handle a situation where no input
+}
 // ------ GENERATED BY STM32CUBEIDE --------
 
 void SystemClock_Config(void)
@@ -611,41 +653,6 @@ static void MX_OPAMP3_Init(void)
 
 }
 
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PC0 PC1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PC9 PC10 PC11 PC12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
-}
 
 
 /**
