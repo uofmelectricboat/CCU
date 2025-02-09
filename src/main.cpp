@@ -72,9 +72,49 @@ can_settings_arduino can_cfg = {
 };
 CAN_Bus_Arduino bus(can_cfg);
 
-CAN_Message<uint8_t> = CCUreadingyay;
-CAN_Packet<1> ccu_message(0x17, &CCUreadingyay);
+CAN_Signal<uint8_t, order::native, 0, 2> gear(1, 0);
+CAN_Signal<uint8_t, order::native, 2, 1> acs_up(1, 0);
+CAN_Signal<uint8_t, order::native, 3, 1> acs_down(1, 0);
+CAN_Signal<uint16_t, order::native, 8, 16> throttleSignal(1, 0);
+CAN_Signal<uint8_t, order::native, 24, 1> modeSignal(1, 0);
+CAN_Packet<5> ccu_message(0x17, false, &gear, &acs_up, &acs_down, &throttleSignal, &modeSignal);
 
+//read gear from gear thing
+//casseia is spitting some BULL about gear uhh idk what im doing but ok
+//gear prob has to be a binary input, assumed using fwee pins
+//heads up theres nasty if elses in here and idk if this is the right procedure but you get code
+uint8_t Read_Gear(void){
+  //gear value will be 00 or 01 or 10 or 11. otherwise it's not valid idk how to handle that
+  //these are the pins we are gettin the state from i think
+  uint8_t gear_pin_1 = digitalReadFast(GEAR_N);
+  uint8_t gear_pin_2 = digitalReadFast(GEAR_F);
+  uint8_t gear_pin_3 = digitalReadFast(GEAR_R);
+  //lowkey used gpt for this because idk how to combine using binary . shoutout gpt
+  //this basically turns the input into like binary ? it just mashes them together
+  //also this code is mad gross sorry
+  if(gear_pin_1==1 &&gear_pin_2==0&&gear_pin_3==0)
+  {
+    //assuming neutral
+    return 0b00;
+  }
+  else if(gear_pin_2==1 &&gear_pin_1==0&&gear_pin_3==0)
+  {
+    //assuming forward
+    return 0b01;
+  }
+  else if(gear_pin_3==1 &&gear_pin_1==0&&gear_pin_2==0)
+  {
+    //assuming reverse
+    return 0b10;
+  }
+  //can this live outside an else statement ? idk. lol
+  else
+  {
+    //wtf is going on condition
+    return 0b11;
+  }
+  //idk if i need to add another return to handle a situation where no input
+}
 
 // Main
 void setup() {
@@ -128,8 +168,8 @@ void loop() {
     // --------- THROTTLE HANDLING -----------
 
     // Custom read throttle function due to lack of support for internal opamp connections
-    throttle1 = Read_Throttle_ADC(1);
-    throttle2 = Read_Throttle_ADC(2);
+    uint16_t throttle1 = Read_Throttle_ADC(1);
+    uint16_t throttle2 = Read_Throttle_ADC(2);
 
     printf("Read values: %d %d\n\r", (uint32_t) throttle1, (uint32_t) throttle2);
 
@@ -179,29 +219,29 @@ void loop() {
   // Tick CANBus
   bus.tick();
 //setting the guys to be read thanks
-  int mode = digitalReadFast(MODE);
-  uint8_t gearguy = Read_Gear_idk();
-  bool acsup = digitalReadFast(ACS_UP);
-  bool acsdn = digitalReadFast(ACS_DN);
-  int throttleuse;
+  modeSignal = digitalReadFast(MODE);
+  gear = Read_Gear();
+  acs_up = digitalReadFast(ACS_UP);
+  acs_down = digitalReadFast(ACS_DN);
   int up, down;
   //if else for which throttle to use and also trim (pretty code)
-  if(mode == 0){
-    throttleuse = Read_Throttle_ADC(1);
+  if(modeSignal == 0) {
+    throttleSignal = Read_Throttle_ADC(1);
     up = digitalReadFast(TRIM_UP_WHEEL);
     down = digitalReadFast(TRIM_DN_WHEEL);
   }
-  else if(mode == 1){
-    throttleuse = Read_Throttle_ADC(2);
+  else if(modeSignal == 1) {
+    throttleSignal = Read_Throttle_ADC(2);
     up = digitalReadFast(TRIM_UP_STICKS);
     down = digitalReadFast(TRIM_DN_STICKS);
   }
-  if (up && down)
-    up = 0; down = 0;
+  if (up && down) {
+  up = 0; down = 0;
   digitalWriteFast(TRIM_UP_CTRL,up);
   digitalWriteFast(TRIM_DN_CTRL,down);
+  }
 
-  CCUreadingyay = gearguy|(acsup<<2)|(acsdn<<3)|(throttleuse<<4)|(mode<<6);
+  // CCUreadingyay = gearguy|(acsup<<2)|(acsdn<<3)|(throttleuse<<4)|(mode<<6);
 }
 
 // Read a throttle opamp channel
@@ -245,42 +285,7 @@ uint16_t Read_Throttle_ADC(int throttle) {
   return th;
 }
 
-//read gear from gear thing
-//casseia is spitting some BULL about gear uhh idk what im doing but ok
-//gear prob has to be a binary input, assumed using fwee pins
-//heads up theres nasty if elses in here and idk if this is the right procedure but you get code
-uint8_t Read_Gear_idk(void){
-  //gear value will be 00 or 01 or 10 or 11. otherwise it's not valid idk how to handle that
-  //these are the pins we are gettin the state from i think
-  uint8_t gear_pin_1 = digitalReadFast(GEAR_N);
-  uint8_t gear_pin_2 = digitalReadFast(GEAR_F);
-  uint8_t gear_pin_3 = digitalReadFast(GEAR_R);
-  //lowkey used gpt for this because idk how to combine using binary . shoutout gpt
-  //this basically turns the input into like binary ? it just mashes them together
-  //also this code is mad gross sorry
-  if(gear_pin_1==1 &&gear_pin_2==0&&gear_pin_3==0)
-  {
-    //assuming neutral
-    return 0b00;
-  }
-  else if(gear_pin_2==1 &&gear_pin_1==0&&gear_pin_3==0)
-  {
-    //assuming forward
-    return 0b01;
-  }
-  else if(gear_pin_3==1 &&gear_pin_1==0&&gear_pin_2==0)
-  {
-    //assuming reverse
-    return 0b10;
-  }
-  //can this live outside an else statement ? idk. lol
-  else
-  {
-    //wtf is going on condition
-    return 0b11;
-  }
-  //idk if i need to add another return to handle a situation where no input
-}
+
 // ------ GENERATED BY STM32CUBEIDE --------
 
 void SystemClock_Config(void)
