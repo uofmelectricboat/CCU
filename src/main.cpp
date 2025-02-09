@@ -147,12 +147,12 @@ void setup() {
   pin_function(ACS_DN, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
 
   pin_function(CAM, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
-  pin_function(LIGHTS, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
+  //pin_function(LIGHTS, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
   pin_function(TRIM_UP_CTRL, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
   pin_function(TRIM_DN_CTRL, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
 
   digitalWriteFast(CAM, LOW);
-  digitalWriteFast(LIGHTS, LOW);
+  //digitalWriteFast(LIGHTS, LOW);
   digitalWriteFast(TRIM_UP_CTRL, LOW);
   digitalWriteFast(TRIM_DN_CTRL, LOW);
   next_throttle_tick = millis();
