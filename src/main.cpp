@@ -42,21 +42,18 @@ uint16_t Read_Throttle_ADC(int);
 #define TRIM_UP_CTRL PC_11
 #define TRIM_DN_CTRL PC_12
 
-long next_throttle_tick;
-long next_manager_tick;
-
 // For printf:
-#ifdef __GNUC__
-#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
-#else
-#define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
-#endif
+// #ifdef __GNUC__
+// #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+// #else
+// #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+// #endif
 
-PUTCHAR_PROTOTYPE
-{
-  HAL_UART_Transmit(&hlpuart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
-  return ch;
-}
+// PUTCHAR_PROTOTYPE
+// {
+//   HAL_UART_Transmit(&hlpuart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+//   return ch;
+// }
 
 
 // CAN definitions
@@ -72,12 +69,9 @@ can_settings_arduino can_cfg = {
 };
 CAN_Bus_Arduino bus(can_cfg);
 
-CAN_Signal<uint8_t, order::native, 0, 2> gear(1, 0);
-CAN_Signal<uint8_t, order::native, 2, 1> acs_up(1, 0);
-CAN_Signal<uint8_t, order::native, 3, 1> acs_down(1, 0);
-CAN_Signal<uint16_t, order::native, 8, 16> throttleSignal(1, 0);
-CAN_Signal<uint8_t, order::native, 24, 1> modeSignal(1, 0);
-CAN_Packet<5> ccu_message(0x17, false, &gear, &acs_up, &acs_down, &throttleSignal, &modeSignal);
+CAN_Message<uint8_t> CCUreadingyay;
+CAN_Message<uint16_t> throttleSignal;
+CAN_Packet<2> ccu_message(0x17, &CCUreadingyay, &throttleSignal);
 
 //read gear from gear thing
 //casseia is spitting some BULL about gear uhh idk what im doing but ok
@@ -86,9 +80,9 @@ CAN_Packet<5> ccu_message(0x17, false, &gear, &acs_up, &acs_down, &throttleSigna
 uint8_t Read_Gear(void){
   //gear value will be 00 or 01 or 10 or 11. otherwise it's not valid idk how to handle that
   //these are the pins we are gettin the state from i think
-  uint8_t gear_pin_1 = digitalReadFast(GEAR_N);
-  uint8_t gear_pin_2 = digitalReadFast(GEAR_F);
-  uint8_t gear_pin_3 = digitalReadFast(GEAR_R);
+  uint8_t gear_pin_1 = !digitalReadFast(GEAR_N);
+  uint8_t gear_pin_2 = !digitalReadFast(GEAR_F);
+  uint8_t gear_pin_3 = !digitalReadFast(GEAR_R);
   //lowkey used gpt for this because idk how to combine using binary . shoutout gpt
   //this basically turns the input into like binary ? it just mashes them together
   //also this code is mad gross sorry
@@ -123,7 +117,7 @@ void setup() {
   MX_ADC1_Init();
   MX_ADC2_Init();
   MX_DAC3_Init();
-  MX_FDCAN1_Init();
+  // MX_FDCAN1_Init();
   MX_OPAMP1_Init();
   MX_OPAMP2_Init();
   MX_OPAMP3_Init();
@@ -155,93 +149,78 @@ void setup() {
   //digitalWriteFast(LIGHTS, LOW);
   digitalWriteFast(TRIM_UP_CTRL, LOW);
   digitalWriteFast(TRIM_DN_CTRL, LOW);
-  next_throttle_tick = millis();
-  next_manager_tick = millis();
 
-  delay(5000);
+  delay(1000);
 }
 
 
 void loop() {
+  // bus.sendPacketUnsized(&ccu_message);
   //throttle land
-  if (millis() > next_throttle_tick) {
-    // --------- THROTTLE HANDLING -----------
+  // --------- THROTTLE HANDLING -----------
 
-    // Custom read throttle function due to lack of support for internal opamp connections
-    uint16_t throttle1 = Read_Throttle_ADC(1);
-    uint16_t throttle2 = Read_Throttle_ADC(2);
+  // Custom read throttle function due to lack of support for internal opamp connections
+  uint16_t throttle1 = Read_Throttle_ADC(1);
+  uint16_t throttle2 = Read_Throttle_ADC(2);
 
-    printf("Read values: %d %d\n\r", (uint32_t) throttle1, (uint32_t) throttle2);
+  printf("Read values: %d %d\n\r", (uint32_t) throttle1, (uint32_t) throttle2);
 
-    // Going from 12-bit to 12-bit, so no bit shift error
+  // Going from 12-bit to 12-bit, so no bit shift error
 
-    // ---- ADC to DAC pass through ----
-    // This scaling works in theory, but in practice leaves a bit of room for error.
-    // Consider adding configuration for each throttle based on its real bounds.
+  // ---- ADC to DAC pass through ----
+  // This scaling works in theory, but in practice leaves a bit of room for error.
+  // Consider adding configuration for each throttle based on its real bounds.
 
-    // Map from 0.5-4.5v (thru voltage divider) to 0-2.5v
-    double out = (double) throttle1 / 4096. * 3.3; // Input voltage
-    out /= (4.3 / (4.3 + 3.3)); // Voltage divider -- Real throttle voltage
-    out = std::clamp<double>(out, 0.5, 4.5);
-    out = (out - 0.5) / 4.5;
-    out *= 2.4; // Max input voltage for dauphine is 2.5v, slight safety factor
-    out *= 4096. / 3.3;
+  // Map from 0.5-4.5v (thru voltage divider) to 0-2.5v
+  double out = (double) throttle1 / 4096. * 3.3; // Input voltage
+  out /= (4.3 / (4.3 + 3.3)); // Voltage divider -- Real throttle voltage
+  out = std::clamp<double>(out, 0.5, 4.5);
+  out = (out - 0.5) / 4.5;
+  out *= 2.4; // Max input voltage for dauphine is 2.5v, slight safety factor
+  out *= 4096. / 3.3;
 
-    uint32_t raw_out = (uint32_t) out;
+  uint32_t raw_out = (uint32_t) out;
 
-    // analogWrite or dac_write_value() cannot be used due to internal op amp buffering
-    if (HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_1, DAC_ALIGN_12B_R, raw_out) != HAL_OK) {
-      /* Setting value Error */
-      Error_Handler();
-    }
-    if (HAL_DAC_Start(&hdac3, DAC_CHANNEL_1) != HAL_OK) {
-      Error_Handler();
-    }
-    
-    // Update next tick trigger
-    next_throttle_tick += 200;
-    if (next_throttle_tick < millis())
-      next_throttle_tick = millis() + 200;
+  // analogWrite or dac_write_value() cannot be used due to internal op amp buffering
+  if (HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_1, DAC_ALIGN_12B_R, raw_out) != HAL_OK) {
+    /* Setting value Error */
+    Error_Handler();
+  }
+  if (HAL_DAC_Start(&hdac3, DAC_CHANNEL_1) != HAL_OK) {
+    Error_Handler();
   }
 
 
-  // CAN Message updating / Control Handling
+  digitalWrite(CAM, LOW);
 
-  if (millis() > next_manager_tick) {
-    digitalWrite(CAM, LOW);
-
-    // Update next tick trigger
-    next_manager_tick += 500;
-    if (next_manager_tick < millis())
-      next_manager_tick = millis() + 500;
+  //setting the guys to be read thanks
+  uint8_t modeSignal = !digitalReadFast(MODE);
+  uint8_t gear = Read_Gear();
+  uint8_t acs_up = !digitalReadFast(ACS_UP);
+  uint8_t acs_down = !digitalReadFast(ACS_DN);
+  int up, down;
+  //if else for which throttle to use and also trim (pretty code)
+  if (modeSignal == 0) {
+    throttleSignal = Read_Throttle_ADC(1);
+    up = !digitalReadFast(TRIM_UP_WHEEL);
+    down = !digitalReadFast(TRIM_DN_WHEEL);
   }
+  else if (modeSignal == 1) {
+    throttleSignal = Read_Throttle_ADC(2);
+    up = !digitalReadFast(TRIM_UP_STICKS);
+    down = !digitalReadFast(TRIM_DN_STICKS);
+  }
+  if (up && down) {
+    up = 0; down = 0;
+    digitalWriteFast(TRIM_UP_CTRL,up);
+    digitalWriteFast(TRIM_DN_CTRL,down);
+  }
+
+  CCUreadingyay = gear|(acs_up<<2)|(acs_down<<3)|(modeSignal<<4);
 
   // Tick CANBus
   bus.tick();
-//setting the guys to be read thanks
-  modeSignal = digitalReadFast(MODE);
-  gear = Read_Gear();
-  acs_up = digitalReadFast(ACS_UP);
-  acs_down = digitalReadFast(ACS_DN);
-  int up, down;
-  //if else for which throttle to use and also trim (pretty code)
-  if(modeSignal == 0) {
-    throttleSignal = Read_Throttle_ADC(1);
-    up = digitalReadFast(TRIM_UP_WHEEL);
-    down = digitalReadFast(TRIM_DN_WHEEL);
-  }
-  else if(modeSignal == 1) {
-    throttleSignal = Read_Throttle_ADC(2);
-    up = digitalReadFast(TRIM_UP_STICKS);
-    down = digitalReadFast(TRIM_DN_STICKS);
-  }
-  if (up && down) {
-  up = 0; down = 0;
-  digitalWriteFast(TRIM_UP_CTRL,up);
-  digitalWriteFast(TRIM_DN_CTRL,down);
-  }
-
-  // CCUreadingyay = gearguy|(acsup<<2)|(acsdn<<3)|(throttleuse<<4)|(mode<<6);
+  delay(10);
 }
 
 // Read a throttle opamp channel
