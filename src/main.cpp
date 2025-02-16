@@ -194,7 +194,7 @@ void loop() {
   digitalWrite(CAM, LOW);
 
   //setting the guys to be read thanks
-  uint8_t modeSignal = !digitalReadFast(MODE);
+  uint8_t modeSignal = digitalReadFast(MODE);
   uint8_t gear = Read_Gear();
   uint8_t acs_up = !digitalReadFast(ACS_UP);
   uint8_t acs_down = !digitalReadFast(ACS_DN);
@@ -212,9 +212,9 @@ void loop() {
   }
   if (up && down) {
     up = 0; down = 0;
-    digitalWriteFast(TRIM_UP_CTRL,up);
-    digitalWriteFast(TRIM_DN_CTRL,down);
   }
+  digitalWriteFast(TRIM_UP_CTRL,up);
+  digitalWriteFast(TRIM_DN_CTRL,down);
 
   CCUreadingyay = gear|(acs_up<<2)|(acs_down<<3)|(modeSignal<<4);
 
