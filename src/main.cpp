@@ -73,6 +73,9 @@ CAN_Message<uint8_t> CCUreadingyay;
 CAN_Message<uint16_t> throttleSignal;
 CAN_Packet<2> ccu_message(0x17, &CCUreadingyay, &throttleSignal);
 
+CAN_Message<uint16_t> switch_status;
+CAN_Packet<1> swbd_switch_status(0x81, &switch_status);
+
 //read gear from gear thing
 //casseia is spitting some BULL about gear uhh idk what im doing but ok
 //gear prob has to be a binary input, assumed using fwee pins
@@ -125,11 +128,12 @@ void setup() {
 
   bus.Init();
   bus.makePacketPeriodic(&ccu_message, 500u);
+  bus.addInputPacket(&swbd_switch_status);
 
   analogReadResolution(12);
 
   // Initialize pins
-  pin_function(MODE, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
+  pin_function(MODE, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLDOWN, 0));
   pin_function(GEAR_R, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
   pin_function(GEAR_F, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
   pin_function(GEAR_N, STM_PIN_DATA(STM_MODE_INPUT, GPIO_PULLUP, 0));
@@ -155,7 +159,8 @@ void setup() {
 
 
 void loop() {
-  // bus.sendPacketUnsized(&ccu_message);
+  uint8_t modeSignal = digitalReadFast(MODE);
+
   //throttle land
   // --------- THROTTLE HANDLING -----------
 
@@ -163,7 +168,7 @@ void loop() {
   uint16_t throttle1 = Read_Throttle_ADC(1);
   uint16_t throttle2 = Read_Throttle_ADC(2);
 
-  printf("Read values: %d %d\n\r", (uint32_t) throttle1, (uint32_t) throttle2);
+  // printf("Read values: %d %d\n\r", (uint32_t) throttle1, (uint32_t) throttle2);
 
   // Going from 12-bit to 12-bit, so no bit shift error
 
@@ -172,17 +177,23 @@ void loop() {
   // Consider adding configuration for each throttle based on its real bounds.
 
   // Map from 0.5-4.5v (thru voltage divider) to 0-2.5v
-  double out = (double) throttle1 / 4096. * 3.3; // Input voltage
+  double out = static_cast<uint16_t>(modeSignal) ? throttle2 : throttle1; // Get throttle
+  out = out / 4096. * 3.3; // Input voltage
   out /= (4.3 / (4.3 + 3.3)); // Voltage divider -- Real throttle voltage
-  out = std::clamp<double>(out, 0.5, 4.5);
-  out = (out - 0.5) / 4.5;
-  out *= 2.4; // Max input voltage for dauphine is 2.5v, slight safety factor
+  if (modeSignal == 0) { // Bounds determined from testing
+    out = std::clamp<double>(out, 1.5, 4.5);
+    out = (out - 1.5) / (4.5-1.5); 
+  } else {
+    out = std::clamp<double>(out, 0.5, 4.5);
+    out = (out - 0.5) / (4.5-0.5); 
+  }
+  out *= 2.35; // Max input voltage for dauphine is 2.5v, slight safety factor
   out *= 4096. / 3.3;
 
   uint32_t raw_out = (uint32_t) out;
 
   // analogWrite or dac_write_value() cannot be used due to internal op amp buffering
-  if (HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_1, DAC_ALIGN_12B_R, raw_out) != HAL_OK) {
+   if (HAL_DAC_SetValue(&hdac3, DAC_CHANNEL_1, DAC_ALIGN_12B_R, raw_out) != HAL_OK) {
     /* Setting value Error */
     Error_Handler();
   }
@@ -191,10 +202,9 @@ void loop() {
   }
 
 
-  digitalWrite(CAM, LOW);
+  digitalWriteFast(CAM, ((static_cast<uint16_t>(switch_status) & 0x2000) == 0x2000));
 
   //setting the guys to be read thanks
-  uint8_t modeSignal = digitalReadFast(MODE);
   uint8_t gear = Read_Gear();
   uint8_t acs_up = !digitalReadFast(ACS_UP);
   uint8_t acs_down = !digitalReadFast(ACS_DN);
