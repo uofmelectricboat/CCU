@@ -127,6 +127,10 @@
 #endif
 
 
+// HSE default value is 25MHz in HAL
+// Xtal is 8MHz
+#define HSE_VALUE             8000000UL
+
 // UART Definitions
 #ifndef SERIAL_UART_INSTANCE
   #define SERIAL_UART_INSTANCE  101 //Connected to ST-Link
